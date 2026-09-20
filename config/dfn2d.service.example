@@ -1,0 +1,14 @@
+[Unit]
+Description=dfn2 LavaSR model daemon (keeps model warm)
+After=network.target sound.target
+
+[Service]
+Type=simple
+User=hari
+ExecStart=/home/hari/dfn-prototype/bin/python -u /home/hari/dfn-prototype/dfn2d.py
+Restart=always
+RestartSec=3
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

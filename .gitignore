@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*_original.wav
+*_lavasr.wav
+*_lavasr.mp3
+*_soft.wav
+*_soft.mp3
+*.wav
+*.mp3
