@@ -20,10 +20,11 @@ INSTALL_DAEMON=0
 log() { printf '\n[dfn2] %s\n' "$*"; }
 
 # --- 0. System deps -----------------------------------------------------------
-log "Checking system packages (python3.11/uv, ffmpeg, tk)..."
+log "Checking system packages (python3.11/uv, ffmpeg, tk, git-lfs)..."
 missing=()
 command -v ffmpeg  >/dev/null || missing+=(ffmpeg)
 command -v uv      >/dev/null || missing+=(uv)
+command -v git-lfs >/dev/null || missing+=(git-lfs)
 command -v python3 || true
 if command -v python3.11 >/dev/null 2>&1; then PY311=python3.11
 elif command -v uv >/dev/null 2>&1; then uv python install 3.11 >/dev/null; PY311="$(uv python find 3.11)"
@@ -31,11 +32,20 @@ else missing+=(python3-venv)
 fi
 if [ ${#missing[@]} -gt 0 ]; then
     echo "  missing: ${missing[*]}"
-    echo "  Install them first. On Arch:  sudo pacman -S uv ffmpeg tk"
-    echo "  On Debian/Ubuntu:  sudo apt install python3.11 python3.11-venv ffmpeg python3-tk"
+    echo "  Install them first. On Arch:  sudo pacman -S uv ffmpeg tk git-lfs"
+    echo "  On Debian/Ubuntu:  sudo apt install git-lfs python3.11 python3.11-venv ffmpeg python3-tk"
     exit 1
-fi
+ fi
 log "Using python: $PY311"
+
+# --- 0b. Fetch git-lfs weight blobs (clone leaves pointers until pulled) -------
+if grep -q "^version https://git-lfs" "$SRC_DIR/weights/denoiser/denoiser.bin" 2>/dev/null; then
+    log "Fetching model weights (git-lfs)..."
+    (cd "$SRC_DIR" && git lfs install --local >/dev/null && git lfs pull >/dev/null)
+fi
+if grep -q "^version https://git-lfs" "$SRC_DIR/weights/denoiser/denoiser.bin" 2>/dev/null; then
+    echo "  ERROR: weights are still LFS pointers — is git-lfs installed?"; exit 1
+fi
 
 # --- 1. venv + torch CPU + deps ----------------------------------------------
 if [ ! -x "$PY" ]; then
