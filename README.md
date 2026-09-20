@@ -1,74 +1,69 @@
 # dfn2 — offline CPU speech enhancement (LavaSR)
 
 Enhances noisy audio locally with the [LavaSR](https://huggingface.co/YatharthS/LavaSR)
-model (Vocos-based BWE + ULULAS denoiser). No GPU needed, model stays warm in a
-systemd daemon so runs feel instant.
+model (Vocos-based BWE + ULULAS denoiser). No GPU needed, fully offline — the
+model weights ship in this repo, so nothing is downloaded at runtime.
 
 ```bash
 dfn2 "file.mp3"          # enhance + save *_lavasr.mp3, play original -> denoised, then menu
-dfn2 "file.mp3" soft     # + spectral grain reduction (gentler high-end, saves *_soft.mp3)
+dfn2 "file.mp3" soft     # + spectral grain reduction (saves *_soft.mp3)
 dfn2 "file.mp3" 1        # play original only
 dfn2 "file.mp3" 2        # play denoised only
 ```
 
 After the first round the CLI prints `Play Again? 1=Original 2=Denoised 0=exit`.
 
-## Setup (Arch/Linux, Python 3.11, CPU)
+## Quick start (one command)
 
 ```bash
-# system deps
-sudo pacman -S uv ffmpeg tk   # uv gives a standalone python3.11
-
-python3.11=$(UV_ROOT=~/.local/share/uv/python/cpython-3.11-linux-x86_64-gnu/bin/python3.11)
-
-# venv + CPU torch
-mkdir -p ~/dfn-prototype && $python3.11 -m venv ~/dfn-prototype
-~/dfn-prototype/bin/pip install "torch==2.4.1+cpu" "torchaudio==2.4.1+cpu" \
-  --index-url https://download.pytorch.org/whl/cpu
-~/dfn-prototype/bin/pip install -r config/requirements_pinned.txt
-
-# REQUIRED: patch vocos with the "matcha" branch API
-cp patch/*.py ~/dfn-prototype/lib/python3.11/site-packages/vocos/
-
-# LavaSR package (no PyPI package exists)
-cp -r LavaSR/LavaSR ~/dfn-prototype/lib/python3.11/site-packages/
-~/dfn-prototype/bin/python -c "from LavaSR.model import LavaEnhance2; print('ok')"
-
-# model weights (229MB) -> HF cache, or let it auto-download on first run
-mkdir -p ~/.cache/huggingface/hub
-
-# put scripts in place + commands
-cp scripts/*.py ~/dfn-prototype/
-chmod +x ~/dfn-prototype/dfn_cli.py ~/dfn-prototype/dfn2d.py
-ln -sf ~/dfn-prototype/dfn_cli.py ~/.local/bin/dfn2
-
-# warm daemon at boot (edit paths/user in the unit first)
-sed "s|/home/USER|$HOME|g; s|User=USER|User=$USER|" config/dfn2d.service.example \
-  | sudo tee /etc/systemd/system/dfn2d.service
-sudo systemctl daemon-reload && sudo systemctl enable --now dfn2d
+git clone https://github.com/Harisdn-32/dfn2-project.git && cd dfn2-project
+./setup.sh                          # builds ~/dfn-prototype (venv + model + weights)
+dfn2 path/to/audio.mp3              # done
 ```
+
+Add `--daemon` to the setup if you want a systemd service that keeps the model
+warm from boot (`./setup.sh --daemon`). Without it the client auto-spawns the
+daemon per run (~3 s first load).
+
+**Prerequisites:** Linux with `python3.11` or `uv`, `ffmpeg`, and (for the GUI /
+tkinter bits) Tk. On Arch: `sudo pacman -S uv ffmpeg tk`. On Debian/Ubuntu:
+`sudo apt install python3.11 python3.11-venv ffmpeg python3-tk`. Playback needs
+working audio (PulseAudio/PipeWire).
+
+## What setup.sh does
+
+1. Finds `python3.11` (or `uv python install 3.11`) and creates `~/dfn-prototype`.
+2. Installs `torch==2.4.1+cpu` + `torchaudio==2.4.1+cpu` from the CPU index, then
+   the pinned deps in `config/requirements_pinned.txt`.
+3. Patches `vocos` with the "matcha" branch API (model will not load without it).
+4. Installs the `LavaSR` package into site-packages (no PyPI package exists).
+5. Copies scripts + model weights (from `weights/`, ~55 MB).
+6. Rewrites script shebangs to the local venv and symlinks `~/.local/bin/dfn2`.
 
 ## Files
 
 | path | what |
 |---|---|
-| `scripts/dfn_cli.py` | current CLI (`dfn2`): MP3 output, `soft` mode, 1/2/0 menu |
+| `setup.sh` | one-command installer (this is all you need) |
+| `scripts/dfn_cli.py` | CLI (`dfn2`): MP3 output, `soft` mode, 1/2/0 menu |
 | `scripts/dfn2d.py` | model daemon (loads once, serves `/tmp/dfn2d.sock`) |
 | `scripts/lavasr.py` | original client (kept for reference) |
 | `scripts/dual_mic_demo.py` | dual-mic least-squares noise subtraction demo |
 | `scripts/play_subtracted.py` | subtract reference noise, play result only |
 | `scripts/compare_all.py` | original vs subtraction vs LavaSR A/B/C |
 | `scripts/process_audio_lavasr.py` | library-style LavaSR helper (in-process) |
+| `weights/` | LavaSR weights (enhancer_v2 + denoiser) via git-lfs |
 | `config/dfn2d.service.example` | systemd unit template for the daemon |
 | `config/requirements_pinned.txt` | exact working pip versions |
-| `LavaSR/` | LavaSR package source (copy into site-packages — no PyPI pkg) |
+| `LavaSR/` | LavaSR package source (copy into site-packages) |
 | `patch/` | vocos "matcha" branch files (overwrite site-packages/vocos/) |
 
 ## Troubleshooting
 
 | symptom | fix |
 |---|---|
-| `TypeError: ... unexpected keyword 'f_min'` (vocos) | redo the vocos matcha patch (step 3) |
+| `TypeError: ... unexpected keyword 'f_min'` (vocos) | re-run `./setup.sh` (re-patches vocos) |
 | CUDA/libcublas errors | reinstall `torch==2.4.1+cpu` from the CPU index |
-| no `/tmp/dfn2d.sock` | `sudo systemctl restart dfn2d`; client auto-spawns daemon otherwise |
+| no `/tmp/dfn2d.sock` | `sudo systemctl restart dfn2d`; otherwise client auto-spawns daemon |
 | grain/musical noise in output | use `dfn2 "file" soft` (spectral reduction of noise-like bins) |
+| weights re-download | shouldn't happen — weights ship in this repo (`weights/`) |

@@ -9,7 +9,12 @@ from LavaSR.model import LavaEnhance2
 # --- Setup Model ---
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
-lava_model = LavaEnhance2("YatharthS/LavaSR", device=device)
+_here = os.path.dirname(os.path.abspath(__file__))
+_weights = os.path.join(_here, "weights")
+lava_model = LavaEnhance2(
+    _weights if os.path.isdir(_weights) else "YatharthS/LavaSR",
+    device=device,
+)
 
 
 def process_audio(input_file, input_sr=16000, denoise=True, batch=False):

@@ -18,7 +18,11 @@ hf_logging.set_verbosity_error()
 
 print("Loading dfn2 model...", flush=True)
 from LavaSR.model import LavaEnhance2
-lava = LavaEnhance2("YatharthS/LavaSR", device="cpu")
+
+_here = os.path.dirname(os.path.abspath(__file__))
+_weights = os.path.join(_here, "weights")
+model_path = _weights if os.path.isdir(_weights) else "YatharthS/LavaSR"
+lava = LavaEnhance2(model_path, device="cpu")
 print("dfn2d ready", flush=True)
 
 
